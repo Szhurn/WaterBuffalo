@@ -11,7 +11,7 @@ whatever the CPU does when you hand it control.
 Boots via Limine and draws a test gradient to the framebuffer.
 
 - [x] **Boot** — Limine protocol requests, higher-half load, framebuffer output
-- [ ] **Serial + console** — 16550 UART, bitmap font, formatted printing
+- [X] **Serial + console** — 16550 UART, bitmap font, formatted printing
 - [ ] **CPU tables** — GDT with TSS, IDT, exception handlers
 - [ ] **Memory** — physical frame allocator, 4-level paging, kernel heap
 - [ ] **Scheduling** — timer interrupt, preemptive threads
