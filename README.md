@@ -30,63 +30,29 @@ GCC cross-toolchain build is needed.
 
 ## Building
 
-Fetch the bootloader (once):
-
 ```bash
-git clone https://github.com/limine-bootloader/limine.git \
-    --branch=v9.x-binary --depth=1 limine
-make -C limine
+make          # kernel ELF
+make iso      # bootable ISO
+make run      # build and boot in QEMU
+make clean    # remove build output
 ```
 
-Build the kernel:
+`make` fetches and builds the bootloader on first run, so a fresh clone needs
+nothing but the packages above.
+
+Override the toolchain from the command line if you want a GCC cross-compiler
+instead of clang:
 
 ```bash
-mkdir -p build
-
-clang++ --target=x86_64-unknown-none-elf -Ithird_party/limine \
-  -std=c++20 -ffreestanding -fno-exceptions -fno-rtti -fno-stack-protector \
-  -fno-PIC -fno-PIE -ffunction-sections -fdata-sections \
-  -m64 -march=x86-64 -mabi=sysv \
-  -mno-80387 -mno-mmx -mno-sse -mno-sse2 -mno-red-zone -mcmodel=kernel \
-  -Wall -Wextra -O2 -g -c src/main.cpp -o build/main.o
-
-ld.lld -m elf_x86_64 -nostdlib -static -z max-page-size=0x1000 \
-  -z noexecstack --gc-sections -T linker.lds build/main.o \
-  -o build/WaterBuffalo
-```
-
-Build the bootable ISO:
-
-```bash
-mkdir -p build/iso_root/boot/limine build/iso_root/EFI/BOOT
-cp build/WaterBuffalo          build/iso_root/boot/
-cp limine.conf                 build/iso_root/boot/limine/
-cp limine/limine-bios.sys \
-   limine/limine-bios-cd.bin \
-   limine/limine-uefi-cd.bin   build/iso_root/boot/limine/
-cp limine/BOOTX64.EFI          build/iso_root/EFI/BOOT/
-
-xorriso -as mkisofs -R -r -J -b boot/limine/limine-bios-cd.bin \
-  -no-emul-boot -boot-load-size 4 -boot-info-table -hfsplus \
-  -apm-block-size 2048 --efi-boot boot/limine/limine-uefi-cd.bin \
-  -efi-boot-part --efi-boot-image --protective-msdos-label \
-  build/iso_root -o build/WaterBuffalo.iso
-
-./limine/limine bios-install build/WaterBuffalo.iso
+make CXX=x86_64-elf-g++ LD=x86_64-elf-ld
 ```
 
 ## Running
 
 ```bash
-qemu-system-x86_64 -M q35 -m 512M -cdrom build/WaterBuffalo.iso \
-  -serial stdio -no-reboot -d int,cpu_reset -D build/qemu.log
-```
-
-Debugging with gdb — start QEMU stopped and waiting:
-
-```bash
-qemu-system-x86_64 -M q35 -m 512M -cdrom build/WaterBuffalo.iso -s -S
-gdb -ex 'target remote :1234' -ex 'symbol-file build/WaterBuffalo' -ex 'break kmain'
+make run      # QEMU, serial on stdio, log to build/qemu.log
+make debug    # QEMU stopped, waiting for gdb on :1234
+make gdb      # attach, load symbols, break on kmain
 ```
 
 ## Layout
