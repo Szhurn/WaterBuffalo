@@ -1,7 +1,11 @@
 #include <stdint.h>
 #include <stddef.h>
+#include <stdbool.h>
 #include <limine.h>
 
+#include "arch/x86_64/serial.hpp"
+
+namespace serial = arch::serial;
 // ============================================================
 // Limine requests
 // ============================================================
@@ -24,6 +28,9 @@ __attribute__((used, section(".limine_requests_end")))
 LIMINE_REQUESTS_END_MARKER;
 
 
+
+
+
 // ============================================================
 // Halt and catch fire
 // ============================================================
@@ -42,17 +49,28 @@ static void hcf() {
 // Kernel entry point
 // ============================================================
 
+
 extern "C" void kmain() {
+
+    // Initialize serial first so even early boot failures are visible.
+    serial::init();
+    serial::write("WaterBuffalo booting\n");
 
     // Ensure the bootloader understands our base revision.
     if (!LIMINE_BASE_REVISION_SUPPORTED) {
+        serial::write("fatal: bootloader rejected base revision\n");
         hcf();
     }
 
     // Ensure we received a framebuffer.
-    if (framebuffer_request.response == nullptr || framebuffer_request.response->framebuffer_count < 1) {
+    if (framebuffer_request.response == nullptr ||
+        framebuffer_request.response->framebuffer_count < 1) {
+
+        serial::write("fatal: no framebuffer from bootloader\n");
         hcf();
     }
+
+    serial::write("framebuffer acquired\n");
 
     // Fetch the first framebuffer.
     struct limine_framebuffer *framebuffer =
@@ -80,6 +98,8 @@ extern "C" void kmain() {
             ] = (nY << 8) | nX;
         }
     }
+
+    serial::write("done\n");
 
     hcf();
 }
