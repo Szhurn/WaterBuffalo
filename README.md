@@ -8,10 +8,11 @@ whatever the CPU does when you hand it control.
 
 ## Status
 
-Boots via Limine and draws a test gradient to the framebuffer.
+Boots via Limine to a framebuffer and serial console, with its own
+descriptor tables.
 
 - [x] **Boot** — Limine protocol requests, higher-half load, framebuffer output
-- [X] **Serial + console** — 16550 UART, bitmap font, formatted printing
+- [x] **Serial + console** — 16550 UART, formatted printing (`kprintf`)
 - [ ] **CPU tables** — GDT with TSS, IDT, exception handlers
 - [ ] **Memory** — physical frame allocator, 4-level paging, kernel heap
 - [ ] **Scheduling** — timer interrupt, preemptive threads
@@ -22,18 +23,18 @@ Boots via Limine and draws a test gradient to the framebuffer.
 Linux (or WSL2). On Debian/Ubuntu:
 
 ```bash
-sudo apt install clang lld llvm make xorriso qemu-system-x86
+sudo apt install clang lld llvm make git g++ gdb xorriso qemu-system-x86
 ```
 
 Clang is used as a cross-compiler via `--target=x86_64-unknown-none-elf`, so no
-GCC cross-toolchain build is needed.
+GCC cross-toolchain build is needed. `git` is required because the bootloader is
+fetched on first build, and `g++` builds the host-side tests.
 
 ## Building
 
 ```bash
 make          # kernel ELF
 make iso      # bootable ISO
-make run      # build and boot in QEMU
 make clean    # remove build output
 ```
 
@@ -55,6 +56,17 @@ make debug    # QEMU stopped, waiting for gdb on :1234
 make gdb      # attach, load symbols, break on kmain
 ```
 
+## Testing
+
+```bash
+make test
+```
+
+Kernel modules without hardware dependencies are compiled by the host
+toolchain and run as an ordinary program, so logic can be verified without
+building an image or booting. Currently covers the formatted-output layer and
+the freestanding `mem*` implementations.
+
 ## Layout
 
 ```
@@ -62,6 +74,7 @@ linker.lds              Memory layout. Higher-half at 0xffffffff80000000,
                         four PT_LOAD segments, KEEPs the Limine requests.
 limine.conf             Boot menu entry and kernel path.
 src/                    Kernel source.
+tests/                  Host-executed unit tests.
 third_party/limine/     Vendored Limine protocol header (0BSD).
 limine/                 Bootloader binaries. Fetched, not committed.
 build/                  Output. Not committed.
@@ -74,8 +87,9 @@ build/                  Output. Not committed.
    start/end markers in `.limine_requests`, and fills in the responses.
 3. It maps the kernel at `0xffffffff80000000`, sets up a stack and long mode
    with paging already enabled, then jumps to `kmain`.
-4. `kmain` verifies the base revision was accepted, takes the framebuffer from
-   the response, and draws.
+4. `kmain` brings up the serial port, verifies the base revision was accepted,
+   installs its own GDT, then takes the framebuffer from the response and
+   draws.
 
 The kernel never returns. There is nothing to return to.
 
@@ -90,3 +104,13 @@ screen and nothing in the logs.
 
 - [Limine](https://github.com/limine-bootloader/limine) — bootloader and boot
   protocol, 0BSD.
+
+## Licence
+
+Copyright (c) 2026 Hunter Shurniak. All rights reserved.
+
+This source is published for review and evaluation only. No permission is
+granted to use, copy, modify or distribute it. See [LICENSE](LICENSE).
+
+`third_party/` contains components under their own licences; the Limine
+protocol header is 0BSD.

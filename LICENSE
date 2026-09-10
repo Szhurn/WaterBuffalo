@@ -1,0 +1,36 @@
+Copyright (c) 2026 Hunter Shurniak. All rights reserved.
+
+This software and its source code are the intellectual property of the
+copyright holder.
+
+No permission is granted to any person to use, copy, modify, merge, publish,
+distribute, sublicense, or sell copies of this software, in whole or in part,
+by any means or for any purpose, without the prior written permission of the
+copyright holder.
+
+The source code is made publicly viewable for the purposes of review and
+evaluation only. Viewing this repository does not grant any licence to its
+contents. Any rights not expressly granted here are reserved.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+--------------------------------------------------------------------------
+
+THIRD-PARTY COMPONENTS
+
+The terms above apply to the original work in this repository. They do not
+apply to third-party components, which are distributed under their own
+licences and remain the property of their respective authors:
+
+  third_party/limine/limine.h
+      The Limine boot protocol header.
+      Copyright (C) 2022-2026 Mintsuki and contributors.
+      Licensed under the BSD Zero Clause License (0BSD).
+
+The Limine bootloader itself is fetched at build time and is not included in
+this repository.
