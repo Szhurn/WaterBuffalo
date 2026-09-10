@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Hunter Shurniak. All rights reserved.
+
 // serial.cpp — bare-metal UART driver for COM1 (0x3F8)
 
 #include "serial.hpp"

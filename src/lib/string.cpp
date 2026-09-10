@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Hunter Shurniak. All rights reserved.
+
 #include <stdint.h>
 #include <stddef.h>
 

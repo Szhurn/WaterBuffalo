@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Hunter Shurniak. All rights reserved.
+
 #include "print.hpp"
 
 #include <stddef.h>

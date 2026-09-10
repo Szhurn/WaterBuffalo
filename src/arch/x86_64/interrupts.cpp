@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Hunter Shurniak. All rights reserved.
+
 #include <stdint.h>
 
 #include "interrupts.hpp"
@@ -54,7 +56,7 @@ extern "C" void isr_handler(InterruptFrame* frame) {
     serial::write(exception_name(frame->vector));
     serial::write("\n");
 
-    print::kprintf("Error code: %lx\n", frame->error_code);
+    print::kprintf("Error code: 0x%lx\n", frame->error_code);
 
     uint64_t cr2 = 0;
 
@@ -64,7 +66,7 @@ extern "C" void isr_handler(InterruptFrame* frame) {
             : "=r"(cr2)
         );
 
-       
+        
         print::kprintf("  Present: %u\n",
                         (frame->error_code >> 0) & 1);
         print::kprintf("  Write: %u\n",
@@ -81,13 +83,11 @@ extern "C" void isr_handler(InterruptFrame* frame) {
                    reinterpret_cast<void*>(cr2));
     print::kprintf("RIP:    %p\n",
                    reinterpret_cast<void*>(frame->rip));
-    print::kprintf("CS:     %lx\n", frame->cs);
-    print::kprintf("RFLAGS: %lx\n", frame->rflags);
+    print::kprintf("CS:     0x%lx\n", frame->cs);
+    print::kprintf("RFLAGS: 0x%lx\n", frame->rflags);
     print::kprintf("RSP:    %p\n",
                    reinterpret_cast<void*>(frame->rsp));
-    print::kprintf("SS:     %lx\n", frame->ss);
-
-        //GPR Section
+    print::kprintf("SS:     0x%lx\n", frame->ss);
 
     print::kprintf("RAX: %p  RBX: %p  RCX: %p\n",
                    reinterpret_cast<void*>(frame->rax),

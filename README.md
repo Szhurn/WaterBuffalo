@@ -8,15 +8,15 @@ whatever the CPU does when you hand it control.
 
 ## Status
 
-Boots via Limine to a framebuffer and serial console, with its own
-descriptor tables.
+Boots via Limine to a framebuffer and serial console, installs its own
+descriptor tables, and handles CPU exceptions with a full register dump.
 
 - [x] **Boot** — Limine protocol requests, higher-half load, framebuffer output
 - [x] **Serial + console** — 16550 UART, formatted printing (`kprintf`)
-- [ ] **CPU tables** — GDT with TSS, IDT, exception handlers
+- [x] **CPU tables** — GDT, IDT, 32 exception handlers with register diagnostics
 - [ ] **Memory** — physical frame allocator, 4-level paging, kernel heap
 - [ ] **Scheduling** — timer interrupt, preemptive threads
-- [ ] **Userspace** — ring 3, `syscall`/`sysret`, ELF loading
+- [ ] **Userspace** — TSS, ring 3, `syscall`/`sysret`, ELF loading
 
 ## Requirements
 
@@ -67,6 +67,42 @@ toolchain and run as an ordinary program, so logic can be verified without
 building an image or booting. Currently covers the formatted-output layer and
 the freestanding `mem*` implementations.
 
+## Diagnostics
+
+All 32 CPU exception vectors are handled. A fault prints the vector and its
+mnemonic, the decoded error code, and the complete register state before
+halting. Writing to a null pointer produces:
+
+```
+*** EXCEPTION ***
+Vector: 14
+Exception: #PF Page Fault
+Error code: 0x2
+  Present: 0
+  Write: 1
+  User: 0
+  Reserved-bit violation: 0
+  Instruction fetch: 0
+CR2:    0x0000000000000000
+RIP:    0xffffffff80001fdf
+CS:     0x8
+RFLAGS: 0x46
+RSP:    0xffff80001ff87fc0
+SS:     0x10
+RAX: 0x000000000000000a  RBX: 0x0000000000000c80  RCX: 0x0000000000000000
+RDX: 0x00000000000003f8  RSI: 0x000000000004fbff  RDI: 0xffffffff8000314a
+RBP: 0xffff80001ff87ff0  R8:  0x0000000000000320  R9:  0xffff8000fd000000
+R10: 0x0000000000000500  R11: 0x0000000000000500  R12: 0x0000000000000500
+R13: 0x0000000000000500  R14: 0xffff8000fd3e6c04  R15: 0x0000000000000320
+
+System halted.
+```
+
+`Error code: 0x2` decodes as a write to a non-present page, and `CR2` confirms
+the address. `CS` and `SS` are the kernel selectors from the GDT installed at
+boot, and the cleared interrupt flag in `RFLAGS` reflects entry through an
+interrupt gate rather than a trap gate.
+
 ## Layout
 
 ```
@@ -88,8 +124,8 @@ build/                  Output. Not committed.
 3. It maps the kernel at `0xffffffff80000000`, sets up a stack and long mode
    with paging already enabled, then jumps to `kmain`.
 4. `kmain` brings up the serial port, verifies the base revision was accepted,
-   installs its own GDT, then takes the framebuffer from the response and
-   draws.
+   installs its own GDT and IDT, then takes the framebuffer from the response
+   and draws.
 
 The kernel never returns. There is nothing to return to.
 

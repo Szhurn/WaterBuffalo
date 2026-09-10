@@ -1,3 +1,5 @@
+# Copyright (c) 2026 Hunter Shurniak. All rights reserved.
+
 .section .text
 
 .extern isr_handler
