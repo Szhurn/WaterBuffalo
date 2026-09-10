@@ -38,34 +38,31 @@ SECTIONS
      *
      * KEEP is required: no code references these objects, so --gc-sections
      * would otherwise discard them. The resulting image links and boots with
-     * every response left null. */
-    .limine_requests : {
+     * every response left null. 
+     */
+        .limine_requests : {
+        __limine_requests_start = .;
         KEEP(*(.limine_requests_start))
         KEEP(*(.limine_requests))
         KEEP(*(.limine_requests_end))
+        __limine_requests_end = .;
     } :limine_requests
 
-    /* Page-align each segment boundary. A page carries a single set of
-     * permissions, so segments sharing a page cannot be granted different
-     * ones. */
     . = ALIGN(CONSTANT(MAXPAGESIZE));
 
-    /* The '.text.*' pattern is required by -ffunction-sections, which emits
-     * each function into its own section. */
     .text : {
+        __text_start = .;
         *(.text .text.*)
+        __text_end = .;
     } :text
 
     . = ALIGN(CONSTANT(MAXPAGESIZE));
 
     .rodata : {
+        __rodata_start = .;
         *(.rodata .rodata.*)
     } :rodata
 
-    /* Pointers to the initialisers of objects with static storage duration
-     * and non-trivial constructors. There is no C runtime to walk this array,
-     * so the kernel must call these itself before relying on any such object;
-     * the bounds are exported for that purpose. */
     .init_array : {
         __init_array_start = .;
         KEEP(*(SORT_BY_INIT_PRIORITY(.init_array.*)))
@@ -73,10 +70,19 @@ SECTIONS
         __init_array_end = .;
     } :rodata
 
+    __rodata_end = .;
+
     . = ALIGN(CONSTANT(MAXPAGESIZE));
 
     .data : {
+        __data_start = .;
         *(.data .data.*)
+    } :data
+
+    .bss : {
+        *(.bss .bss.*)
+        *(COMMON)
+        __data_end = .;
     } :data
 
     /* .bss must remain a separate output section. An output section's type is
