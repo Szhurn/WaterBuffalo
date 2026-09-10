@@ -6,6 +6,7 @@
 #   make run      boot the ISO in QEMU
 #   make debug    boot under QEMU, stopped, waiting for gdb on :1234
 #   make gdb      attach gdb to a `make debug` session
+#   make test     build and run the host-side unit tests
 #   make clean    remove build output
 # ===========================================================================
 
@@ -178,6 +179,37 @@ gdb:
 	gdb -ex 'target remote :1234' \
 	    -ex 'symbol-file $(ELF)' \
 	    -ex 'break kmain'
+
+# ---------------------------------------------------------------------------
+# Host-side unit tests
+#
+# The modules listed in TESTABLE_SRCS have no hardware dependencies - no port
+# I/O, no MMIO, no assembly - so they are ordinary C++ that the HOST compiler
+# can build and run as a normal program. That turns a change-and-verify cycle
+# from "rebuild the ISO and boot QEMU" into a few milliseconds.
+#
+# Only add a source here if it would still make sense running as a userspace
+# program. serial.cpp would compile and then fault on its first `out`
+# instruction; a physical frame allocator or an ELF header parser is pure logic
+# over memory and belongs here.
+#
+# -fno-builtin matters for string.cpp: without it the compiler replaces calls
+# to memcpy/memset with its own inline versions, and the tests would silently
+# exercise the compiler instead of your implementations.
+# ---------------------------------------------------------------------------
+HOST_CXX      ?= g++
+TEST_SRCS     := $(wildcard tests/*.cpp)
+TESTABLE_SRCS := src/lib/print.cpp src/lib/string.cpp
+TEST_BIN      := $(BUILD)/tests/runner
+
+.PHONY: test
+test: $(TEST_BIN)
+	@$(TEST_BIN)
+
+$(TEST_BIN): $(TEST_SRCS) $(TESTABLE_SRCS) tests/test.hpp
+	@mkdir -p $(dir $@)
+	$(HOST_CXX) -std=c++20 -fno-builtin -Wall -Wextra -g \
+		-I src -I tests -o $@ $(TEST_SRCS) $(TESTABLE_SRCS)
 
 # ---------------------------------------------------------------------------
 # Housekeeping
