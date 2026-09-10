@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Hunter Shurniak. All rights reserved.
+
 #pragma once
 
 #include <stdint.h>
@@ -96,6 +98,39 @@ static_assert(
     sizeof(PageTable) == kPageSize,
     "PageTable must occupy exactly one 4 KiB page"
 );
+
+
+// ============================================================
+// Page-table entry address helpers
+// ============================================================
+
+inline constexpr uint64_t kPhysicalAddressMask =
+    0x000FFFFFFFFFF000ull;
+
+
+constexpr uint64_t make_page_entry(
+    uint64_t physical_address,
+    PageFlags flags
+)
+{
+    return
+        (physical_address & kPhysicalAddressMask) |
+        static_cast<uint64_t>(flags);
+}
+
+
+constexpr uint64_t page_entry_address(uint64_t entry)
+{
+    return entry & kPhysicalAddressMask;
+}
+
+
+constexpr PageFlags page_entry_flags(uint64_t entry)
+{
+    return static_cast<PageFlags>(
+        entry & ~kPhysicalAddressMask
+    );
+}
 
 
 // ============================================================
@@ -205,6 +240,14 @@ constexpr bool is_canonical(uint64_t address)
 
     return upper == 0xFFFF;
 }
+
+
+bool map_page(
+    PageTable* pml4,
+    uint64_t virt,
+    uint64_t phys,
+    PageFlags flags
+);
 
 } // namespace mm
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Hunter Shurniak. All rights reserved
+// Copyright (c) 2026 Hunter Shurniak. All rights reserved.
 
 #include <stdint.h>
 #include <stddef.h>
@@ -19,6 +19,7 @@ static uint64_t bitmap_bytes = 0;
 
 static uint64_t frame_count = 0;
 static uint64_t free_frame_count = 0;
+static uint64_t g_hhdm_offset = 0;
 
 
 // ============================================================
@@ -94,6 +95,7 @@ void init(
     size_t count,
     uint64_t hhdm_offset
 ) {
+    g_hhdm_offset = hhdm_offset;
     uint64_t highest_usable_end = 0;
     uint64_t usable_bytes = 0;
 
@@ -368,7 +370,7 @@ uint64_t alloc_frame() {
 
 void free_frame(uint64_t address) {
 
-        if ((address % kPageSize) != 0) {
+    if ((address % kPageSize) != 0) {
         print::kprintf(
             "fatal: pmm::free_frame: misaligned address %p\n",
             address
@@ -402,5 +404,12 @@ void free_frame(uint64_t address) {
     ++free_frame_count;
 }
 
+
+uint64_t physical_to_virtual(uint64_t address)
+{
+    return g_hhdm_offset + address;
 }
+
+}
+
 

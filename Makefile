@@ -173,7 +173,8 @@ gdb:
 # ---------------------------------------------------------------------------
 HOST_CXX      ?= g++
 TEST_SRCS     := $(wildcard tests/*.cpp)
-TESTABLE_SRCS := src/lib/print.cpp src/lib/string.cpp src/mm/pmm.cpp
+TESTABLE_SRCS := src/lib/print.cpp src/lib/string.cpp src/mm/pmm.cpp \
+                 src/mm/vmm.cpp
 TEST_BIN      := $(BUILD)/tests/runner
 
 .PHONY: test

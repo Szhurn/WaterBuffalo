@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Hunter Shurniak. All rights reserved
+// Copyright (c) 2026 Hunter Shurniak. All rights reserved.
 
 #pragma once
 
@@ -31,7 +31,8 @@ void init(
 );
 
 uint64_t alloc_frame();
-
 void free_frame(uint64_t address);
+
+uint64_t physical_to_virtual(uint64_t address);
 
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Hunter Shurniak. All rights reserved
+// Copyright (c) 2026 Hunter Shurniak. All rights reserved.
 
 #pragma once
 
