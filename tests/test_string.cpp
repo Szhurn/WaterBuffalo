@@ -7,8 +7,9 @@
 
 // Declared rather than included: these are the kernel's own definitions from
 // src/lib/string.cpp. The test target builds with -fno-builtin so the compiler
-// emits real calls to them instead of substituting its own inline versions -
-// otherwise these tests would silently exercise the compiler, not your code.
+// emits real calls to them instead of substituting its own inline versions;
+// without it these tests would exercise the compiler rather than the kernel
+// implementations.
 extern "C" {
 void* memcpy(void* dest, const void* src, size_t n);
 void* memset(void* dest, int c, size_t n);
@@ -43,9 +44,9 @@ TEST(memcmp_orders) {
 }
 
 TEST(memmove_handles_overlap) {
-    // The whole reason memmove exists: regions that overlap. Copying forward
-    // when dest > src would read bytes already overwritten, so the direction
-    // has to be chosen from the pointers.
+    // Overlapping regions are the case memmove exists for. Copying forward when
+    // dest > src would read bytes already overwritten, so the copy direction is
+    // selected from the operand order.
     char forward[] = "abcdef";
     memmove(forward + 2, forward, 4);
     CHECK_STREQ(forward, "ababcd");

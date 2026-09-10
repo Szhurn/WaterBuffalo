@@ -15,7 +15,8 @@ void sink(char c) {
     if (used < sizeof(buffer) - 1) buffer[used++] = c;
 }
 
-// Formats into the capture buffer and returns it, so a check reads as one line.
+// Formats into the capture buffer and returns it, keeping each check to one
+// expression.
 const char* fmt(const char* format, auto... args) {
     used = 0;
     std::memset(buffer, 0, sizeof(buffer));
@@ -40,7 +41,7 @@ TEST(unsigned_decimal) {
     CHECK_STREQ(fmt("%u", 0u), "0");
     CHECK_STREQ(fmt("%u", 4294967295u), "4294967295");
 
-    // 20 digits - the case that overflows a 16-byte conversion buffer.
+    // 20 digits: the width that overflows a 16-byte conversion buffer.
     CHECK_STREQ(fmt("%lu", UINT64_MAX), "18446744073709551615");
 }
 

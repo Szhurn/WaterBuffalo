@@ -25,5 +25,5 @@ int run_all() {
 
 }  // namespace testing
 
-// Non-zero exit on failure, so `make test` fails the build and CI notices.
+// Non-zero exit on failure so the build fails when a case regresses.
 int main() { return testing::run_all(); }
