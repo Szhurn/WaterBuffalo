@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Hunter Shurniak. All rights reserved
+
 #pragma once
 
 #include <stdint.h>

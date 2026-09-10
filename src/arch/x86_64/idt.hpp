@@ -5,7 +5,8 @@
 
 namespace arch::idt {
 
-    
+    void init();
+
     struct Entry {
         uint16_t offset_low;   
         uint16_t selector; 

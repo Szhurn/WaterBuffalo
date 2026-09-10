@@ -8,7 +8,10 @@
 #include "arch/x86_64/gdt.hpp"
 #include "arch/x86_64/serial.hpp"
 #include "lib/print.hpp"
+#include "arch/x86_64/idt.hpp"
 
+
+namespace idt = arch::idt;
 namespace gdt    = arch::gdt;
 namespace serial = arch::serial;
 // ============================================================
@@ -58,6 +61,8 @@ static void hcf() {
 extern "C" void kmain() {
 
     gdt::init();
+
+    idt::init();
 
     // Initialize serial first so even early boot failures are visible.
     serial::init();
@@ -114,6 +119,9 @@ extern "C" void kmain() {
     }
 
     serial::write("done\n");
+
+    volatile int* p = nullptr;
+    *p = 1;
 
     hcf();
 }
