@@ -1,10 +1,15 @@
+// Copyright (c) 2026 Hunter Shurniak. All rights reserved
+
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
 #include <limine.h>
 
+#include "arch/x86_64/gdt.hpp"
 #include "arch/x86_64/serial.hpp"
+#include "lib/print.hpp"
 
+namespace gdt    = arch::gdt;
 namespace serial = arch::serial;
 // ============================================================
 // Limine requests
@@ -52,13 +57,20 @@ static void hcf() {
 
 extern "C" void kmain() {
 
+    gdt::init();
+
     // Initialize serial first so even early boot failures are visible.
     serial::init();
+
+    print::set_sink(serial::putc);
+
     serial::write("WaterBuffalo booting\n");
 
     // Ensure the bootloader understands our base revision.
     if (!LIMINE_BASE_REVISION_SUPPORTED) {
-        serial::write("fatal: bootloader rejected base revision\n");
+        print::kprintf(
+            "fatal: bootloader rejected base revision\n"
+        );
         hcf();
     }
 
@@ -66,7 +78,9 @@ extern "C" void kmain() {
     if (framebuffer_request.response == nullptr ||
         framebuffer_request.response->framebuffer_count < 1) {
 
-        serial::write("fatal: no framebuffer from bootloader\n");
+        print::kprintf(
+            "fatal: no framebuffer from bootloader\n"
+        );
         hcf();
     }
 
