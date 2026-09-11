@@ -35,4 +35,5 @@ void free_frame(uint64_t address);
 
 uint64_t physical_to_virtual(uint64_t address);
 
+uint64_t virtual_to_physical(uint64_t address);  
 }

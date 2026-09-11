@@ -410,6 +410,11 @@ uint64_t physical_to_virtual(uint64_t address)
     return g_hhdm_offset + address;
 }
 
+uint64_t virtual_to_physical(uint64_t address)
+{
+    return address - g_hhdm_offset;
+}
+
 }
 
 

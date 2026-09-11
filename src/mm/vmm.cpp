@@ -22,7 +22,7 @@ static bool allocate_table(AllocatedTable& table)
 {
     const uint64_t physical = alloc_frame();
 
-    if (physical == 0) {
+    if (physical == UINT64_MAX) {
         return false;
     }
 
@@ -61,6 +61,52 @@ constexpr PageFlags intermediate_flags(PageFlags leaf_flags)
 }
 
 
+static PageTable* ensure_table(
+    uint64_t& entry,
+    PageFlags middle_flags
+)
+{
+    const uint64_t present =
+        static_cast<uint64_t>(PageFlags::Present);
+
+        const uint64_t huge =
+        static_cast<uint64_t>(PageFlags::Huge);
+
+    // Something already occupies this entry as a huge mapping.
+    if (entry & huge) {
+        return nullptr;
+    }
+
+    // No table exists yet.
+    if ((entry & present) == 0) {
+        AllocatedTable table;
+
+        if (!allocate_table(table)) {
+            return nullptr;
+        }
+
+        entry =
+            make_page_entry(
+                table.physical,
+                middle_flags
+            );
+
+        return table.virtual_address;
+    }
+
+    // A table already exists. Add any permissions required
+    // by the new mapping without removing existing ones.
+    entry |=
+        static_cast<uint64_t>(middle_flags);
+
+    return reinterpret_cast<PageTable*>(
+        physical_to_virtual(
+            page_entry_address(entry)
+        )
+    );
+
+}
+
 // ============================================================
 // Map one 4 KiB page
 // ============================================================
@@ -72,6 +118,7 @@ bool map_page(
     PageFlags flags
 )
 {
+
     // --------------------------------------------------------
     // Validate arguments.
     // --------------------------------------------------------
@@ -110,150 +157,34 @@ bool map_page(
     const PageFlags middle_flags =
         intermediate_flags(flags);
 
+    PageTable* pdpt =
+        ensure_table(
+            pml4->entries[address.pml4_index],
+            middle_flags
+        );
 
-    // --------------------------------------------------------
-    // PML4 -> PDPT
-    // --------------------------------------------------------
-
-    uint64_t& pml4_entry =
-        pml4->entries[address.pml4_index];
-
-    PageTable* pdpt = nullptr;
-
-    if ((pml4_entry &
-         static_cast<uint64_t>(PageFlags::Present)) == 0) {
-
-        AllocatedTable table;
-
-        if (!allocate_table(table)) {
-            return false;
-        }
-
-        pml4_entry =
-            make_page_entry(
-                table.physical,
-                middle_flags
-            );
-
-        pdpt = table.virtual_address;
-
-    } else {
-
-        pdpt =
-            reinterpret_cast<PageTable*>(
-                physical_to_virtual(
-                    page_entry_address(pml4_entry)
-                )
-            );
-
-        // PML4 entries point to the next table.
-        // Do not accept malformed entries.
-        if (
-            pml4_entry &
-            static_cast<uint64_t>(PageFlags::Huge)
-        ) {
-            return false;
-        }
-
-        pml4_entry |=
-            static_cast<uint64_t>(middle_flags);
+    if (pdpt == nullptr) {
+        return false;
     }
 
+    PageTable* pd =
+        ensure_table(
+            pdpt->entries[address.pdpt_index],
+            middle_flags
+        );
 
-    // --------------------------------------------------------
-    // PDPT -> PD
-    // --------------------------------------------------------
-
-    uint64_t& pdpt_entry =
-        pdpt->entries[address.pdpt_index];
-
-    PageTable* pd = nullptr;
-
-    if ((pdpt_entry &
-         static_cast<uint64_t>(PageFlags::Present)) == 0) {
-
-        AllocatedTable table;
-
-        if (!allocate_table(table)) {
-            return false;
-        }
-
-        pdpt_entry =
-            make_page_entry(
-                table.physical,
-                middle_flags
-            );
-
-        pd = table.virtual_address;
-
-    } else {
-
-        if (
-            pdpt_entry &
-            static_cast<uint64_t>(PageFlags::Huge)
-        ) {
-            // This entry is already a 1 GiB mapping.
-            // We cannot descend through it as a page table.
-            return false;
-        }
-
-        pd =
-            reinterpret_cast<PageTable*>(
-                physical_to_virtual(
-                    page_entry_address(pdpt_entry)
-                )
-            );
-
-        pdpt_entry |=
-            static_cast<uint64_t>(middle_flags);
+    if (pd == nullptr) {
+        return false;
     }
 
+    PageTable* pt =
+        ensure_table(
+            pd->entries[address.pd_index],
+            middle_flags
+        );
 
-    // --------------------------------------------------------
-    // PD -> PT
-    // --------------------------------------------------------
-
-    uint64_t& pd_entry =
-        pd->entries[address.pd_index];
-
-    PageTable* pt = nullptr;
-
-    if ((pd_entry &
-         static_cast<uint64_t>(PageFlags::Present)) == 0) {
-
-        AllocatedTable table;
-
-        if (!allocate_table(table)) {
-            return false;
-        }
-
-        pd_entry =
-            make_page_entry(
-                table.physical,
-                middle_flags
-            );
-
-        pt = table.virtual_address;
-
-    } else {
-
-        if (
-            pd_entry &
-            static_cast<uint64_t>(PageFlags::Huge)
-        ) {
-            // This entry is already a 2 MiB mapping.
-            return false;
-        }
-
-        pt =
-            reinterpret_cast<PageTable*>(
-                physical_to_virtual(
-                    page_entry_address(pd_entry)
-                )
-            );
-
-        pd_entry |=
-            static_cast<uint64_t>(middle_flags);
+    if (pt == nullptr) {
+        return false;
     }
 
 
