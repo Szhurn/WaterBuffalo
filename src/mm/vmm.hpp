@@ -6,7 +6,7 @@
 #include <stddef.h>
 
 namespace mm {
-
+struct MemoryRegion;
 // ============================================================
 // Page-table constants
 // ============================================================
@@ -282,6 +282,28 @@ bool map_range_large(
     uint64_t size,
     PageFlags flags
 );
+
+struct KernelLayout {
+    uint64_t virtual_base;
+    uint64_t physical_base;
+
+    uint64_t image_start;
+    uint64_t text_start;
+    uint64_t rodata_start;
+    uint64_t data_start;
+    uint64_t data_end;
+};
+
+bool build_kernel_address_space(
+    AddressSpace& out,
+    const MemoryRegion* regions,
+    size_t region_count,
+    uint64_t hhdm_offset,
+    const KernelLayout& layout
+);
+
+
+void load_address_space(const AddressSpace& space);
 
 } // namespace mm
 

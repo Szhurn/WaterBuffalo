@@ -5,6 +5,7 @@
 
 #include "vmm.hpp"
 #include "pmm.hpp"
+#include "arch/x86_64/msr.hpp"
 
 namespace mm {
 
@@ -184,6 +185,7 @@ bool map_range(
 
     return true;
 }
+
 
 bool map_range_large(
     const AddressSpace& space,
@@ -501,6 +503,55 @@ uint64_t translate(
     return
         page_entry_address(pt_entry) |
         (virt & 0xFFFull);
+}
+
+void load_address_space(const AddressSpace& space)
+{
+    asm volatile("mov %0, %%cr3" :: "r"(space.pml4_physical) : "memory");
+}
+
+bool build_kernel_address_space(
+    AddressSpace& out,
+    const MemoryRegion* regions,
+    size_t region_count,
+    uint64_t hhdm_offset,
+    const KernelLayout& layout
+)
+{
+    if (regions == nullptr) return false;
+    if (region_count == 0) return false;
+    if ((hhdm_offset & (kLargePageSize - 1)) != 0) return false;
+
+    arch::enable_nx();
+
+    if (!create_address_space(out)) return false;
+
+    uint64_t highest = 0;
+
+    for (size_t i = 0; i < region_count; ++i) {
+        const uint64_t end = regions[i].base + regions[i].length;
+
+        if (end > highest)
+            highest = end;
+    }
+
+    if (highest == 0)
+        return false;
+
+    highest = (highest + kLargePageSize - 1) & ~(kLargePageSize - 1);
+
+    if (!map_range_large(
+            out,
+            hhdm_offset,
+            0,
+            highest,
+            PageFlags::Writable | PageFlags::NoExecute))
+    {
+        return false;
+    }
+
+    return true;
+
 }
 
 } // namespace mm

@@ -10,7 +10,7 @@
 #include "lib/print.hpp"
 #include "arch/x86_64/idt.hpp"
 #include "mm/pmm.hpp"
-
+#include "mm/vmm.hpp"
 
 namespace idt = arch::idt;
 namespace gdt = arch::gdt;
@@ -29,7 +29,7 @@ extern "C" char __rodata_end[];
 
 extern "C" char __data_start[];
 extern "C" char __data_end[];
-
+extern "C" char __limine_requests_start[];
 
 // ============================================================
 // Limine requests
@@ -239,6 +239,8 @@ extern "C" void kmain()
     // Kernel virtual / physical address information
     // ========================================================
 
+    const uint64_t hhdm_offset = hhdm_request.response->offset;
+    
     const uint64_t kernel_virtual_base =
         kernel_address_request.response->virtual_base;
 
@@ -335,6 +337,8 @@ extern "C" void kmain()
     const uint64_t data_end =
         reinterpret_cast<uint64_t>(__data_end);
 
+    const uint64_t image_start =
+        reinterpret_cast<uint64_t>(__limine_requests_start);
 
     // ========================================================
     // Print kernel segment information
@@ -381,14 +385,60 @@ extern "C" void kmain()
         hhdm_request.response->offset
     );
 
+    struct limine_framebuffer* framebuffer =
+        framebuffer_request.response->framebuffers[0];
 
+    mm::KernelLayout layout{
+        .virtual_base = kernel_virtual_base,
+        .physical_base = kernel_physical_base,
+        .image_start = image_start,
+        .text_start = text_start,
+        .rodata_start = rodata_start,
+        .data_start = data_start,
+        .data_end = data_end,
+    };
+
+    mm::AddressSpace space;
+
+    if (!build_kernel_address_space(
+        space,
+        regions,
+        memmap_request.response->entry_count,
+        hhdm_request.response->offset,
+        layout
+    ))
+    {
+        print::kprintf("FATAL: failed to build kernel address space\n");
+        hcf();
+    }
+    
+    print::kprintf(
+        "pml4 physical:  %p\n",
+        space.pml4_physical
+    );
+
+    print::kprintf(
+        "hhdm translate: %p (expect 0x1000)\n",
+        mm::translate(
+            space,
+            hhdm_request.response->offset + 0x1000
+        )
+    );
+
+    print::kprintf(
+        "fb translate:   %p (expect 0xfd000000)\n",
+        mm::translate(
+            space,
+            reinterpret_cast<uint64_t>(framebuffer->address)
+        )
+    );
+    
     // ========================================================
     // Framebuffer drawing
     // ========================================================
 
     // Fetch the first framebuffer.
-    struct limine_framebuffer* framebuffer =
-        framebuffer_request.response->framebuffers[0];
+    
 
     // Assume a 32-bit RGB framebuffer.
     auto* fb_ptr =
@@ -431,6 +481,7 @@ extern "C" void kmain()
 
     *p = 1;
 
-
     hcf();
+
+
 }
