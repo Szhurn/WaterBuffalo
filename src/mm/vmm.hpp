@@ -14,6 +14,11 @@ inline constexpr size_t kPageTableEntries = 512;
 inline constexpr size_t kPageSize = 4096;
 inline constexpr size_t kLargePageSize = 2 * 1024 * 1024;
 
+constexpr uint64_t align_up(uint64_t value, uint64_t alignment)
+{
+    return (value + alignment - 1) & ~(alignment - 1);
+}
+
 // ============================================================
 // Page-table entry flags
 // ============================================================

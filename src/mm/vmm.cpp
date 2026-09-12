@@ -538,7 +538,7 @@ bool build_kernel_address_space(
     if (highest == 0)
         return false;
 
-    highest = (highest + kLargePageSize - 1) & ~(kLargePageSize - 1);
+    highest = align_up(highest, kLargePageSize);
 
     if (!map_range_large(
             out,
@@ -549,6 +549,32 @@ bool build_kernel_address_space(
     {
         return false;
     }
+
+    const uint64_t data_end_rounded =
+        align_up(layout.data_end, kPageSize);
+
+    auto map_segment =
+        [&](uint64_t start, uint64_t end, PageFlags flags) -> bool
+        {
+            const uint64_t phys =
+                start - layout.virtual_base + layout.physical_base;
+
+            const uint64_t size = end - start;
+
+            return map_range(out, start, phys, size, flags);
+        };
+
+    if (!map_segment(layout.image_start,  layout.text_start,
+                    PageFlags::NoExecute))                        return false;
+
+    if (!map_segment(layout.text_start,   layout.rodata_start,
+                    PageFlags::None))                             return false;
+
+    if (!map_segment(layout.rodata_start, layout.data_start,
+                    PageFlags::NoExecute))                        return false;
+
+    if (!map_segment(layout.data_start,   data_end_rounded,
+                    PageFlags::Writable | PageFlags::NoExecute))  return false;
 
     return true;
 

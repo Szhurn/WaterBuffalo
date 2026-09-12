@@ -433,6 +433,27 @@ extern "C" void kmain()
         )
     );
     
+    print::kprintf(
+        "translate image_start: %p\n",
+        mm::translate(space, image_start)
+    );
+
+    print::kprintf(
+        "translate text_start:  %p\n",
+        mm::translate(space, text_start)
+    );
+
+    print::kprintf(
+        "translate data_start:  %p\n",
+        mm::translate(space, data_start)
+    );
+
+    print::kprintf("loading cr3...\n");
+
+    mm::load_address_space(space);
+
+    print::kprintf("cr3 loaded\n");
+
     // ========================================================
     // Framebuffer drawing
     // ========================================================
