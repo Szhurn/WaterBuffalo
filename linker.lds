@@ -79,22 +79,19 @@ SECTIONS
         *(.data .data.*)
     } :data
 
+    /* .bss must remain a separate output section. An output section's type is
+     * derived from its input sections, so merging NOBITS .bss into PROGBITS
+     * .data would make the whole section PROGBITS and write every zero byte
+     * into the image. Kept separate it occupies no file space, and the loader
+     * zeroes the difference between memsz and filesz. */
+
     .bss : {
         *(.bss .bss.*)
         *(COMMON)
         __data_end = .;
     } :data
 
-    /* .bss must remain a separate output section. An output section's type is
-     * derived from its input sections, so merging NOBITS .bss into PROGBITS
-     * .data would make the whole section PROGBITS and write every zero byte
-     * into the image. Kept separate it occupies no file space, and the loader
-     * zeroes the difference between memsz and filesz. */
-    .bss : {
-        *(.bss .bss.*)
-        *(COMMON)
-    } :data
-
+    
     /* Unwind tables are unused under -fno-exceptions; the rest is toolchain
      * metadata. */
     /DISCARD/ : {

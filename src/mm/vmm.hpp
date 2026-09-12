@@ -10,10 +10,9 @@ namespace mm {
 // ============================================================
 // Page-table constants
 // ============================================================
-
 inline constexpr size_t kPageTableEntries = 512;
 inline constexpr size_t kPageSize = 4096;
-
+inline constexpr size_t kLargePageSize = 2 * 1024 * 1024;
 
 // ============================================================
 // Page-table entry flags
@@ -249,6 +248,40 @@ bool map_page(
     PageFlags flags
 );
 
+struct AddressSpace {
+    PageTable* pml4;
+    uint64_t pml4_physical;
+};
+
+bool create_address_space(AddressSpace& out);
+
+bool map_range(
+    const AddressSpace& space,
+    uint64_t virt,
+    uint64_t phys,
+    uint64_t size,
+    PageFlags flags
+);
+
+uint64_t translate(
+    const AddressSpace& space,
+    uint64_t virt
+);
+
+bool map_page_large(
+    PageTable* pml4,
+    uint64_t virt,
+    uint64_t phys,
+    PageFlags flags
+);
+
+bool map_range_large(
+    const AddressSpace&,
+    uint64_t virt,
+    uint64_t phys,
+    uint64_t size,
+    PageFlags flags
+);
 
 } // namespace mm
 

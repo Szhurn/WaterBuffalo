@@ -44,6 +44,23 @@ static bool allocate_table(AllocatedTable& table)
 }
 
 
+bool create_address_space(AddressSpace& out)
+{
+    AllocatedTable table;
+
+    if (!allocate_table(table)) {
+        return false;
+    }
+
+    out = {
+        .pml4 = table.virtual_address,
+        .pml4_physical = table.physical
+    };
+
+    return true;
+}
+
+
 constexpr PageFlags intermediate_flags(PageFlags leaf_flags)
 {
     PageFlags result =
@@ -105,6 +122,111 @@ static PageTable* ensure_table(
         )
     );
 
+}
+
+bool map_range(
+    const AddressSpace& space,
+    uint64_t virt,
+    uint64_t phys,
+    uint64_t size,
+    PageFlags flags
+)
+{
+    if (space.pml4 == nullptr) {
+        return false;
+    }
+
+    if (size == 0) {
+        return false;
+    }
+
+    if ((virt & (kPageSize - 1)) != 0) {
+        return false;
+    }
+
+    if ((phys & (kPageSize - 1)) != 0) {
+        return false;
+    }
+
+    if ((size & (kPageSize - 1)) != 0) {
+        return false;
+    }
+
+    // Check that the virtual range does not wrap around
+    // uint64_t before starting the mapping loop.
+    if (virt > UINT64_MAX - size) {
+        return false;
+    }
+
+    // Likewise, don't allow the physical range to overflow.
+    if (phys > UINT64_MAX - size) {
+        return false;
+    }
+
+    if (!is_canonical(virt)) return false;
+    if (!is_canonical(virt + size - 1)) return false;
+
+    // This operation is not atomic. If map_page() fails halfway
+    // through, the pages already mapped remain mapped.
+    for (uint64_t offset = 0;
+         offset < size;
+         offset += kPageSize) {
+
+        if (!map_page(
+                space.pml4,
+                virt + offset,
+                phys + offset,
+                flags
+            )) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool map_range_large(
+    const AddressSpace& space,
+    uint64_t virt,
+    uint64_t phys,
+    uint64_t size,
+    PageFlags flags
+)
+{
+    if (space.pml4 == nullptr) return false;
+    if (size == 0) return false;
+
+    constexpr uint64_t kLargePageMask =
+        kLargePageSize - 1;
+
+    if ((virt & kLargePageMask) != 0) return false;
+    if ((phys & kLargePageMask) != 0) return false;
+    if ((size & kLargePageMask) != 0) return false;
+
+    if (virt > UINT64_MAX - size) return false;
+    if (phys > UINT64_MAX - size) return false;
+
+    if (!is_canonical(virt)) return false;
+    if (!is_canonical(virt + size - 1)) return false;
+
+    // This operation is not atomic. If map_page_large()
+    // fails halfway through, earlier mappings remain mapped.
+    for (
+        uint64_t offset = 0;
+        offset < size;
+        offset += kLargePageSize
+    ) {
+        if (!map_page_large(
+                space.pml4,
+                virt + offset,
+                phys + offset,
+                flags
+            )) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 // ============================================================
@@ -188,6 +310,7 @@ bool map_page(
     }
 
 
+
     // --------------------------------------------------------
     // PT -> physical page
     // --------------------------------------------------------
@@ -210,6 +333,174 @@ bool map_page(
         );
 
     return true;
+}
+
+bool map_page_large(
+    PageTable* pml4,
+    uint64_t virt,
+    uint64_t phys,
+    PageFlags flags
+)
+{
+    if (pml4 == nullptr) return false;
+    if (!is_canonical(virt)) return false;
+
+    constexpr uint64_t kLargePageMask =
+        kLargePageSize - 1;
+
+    if ((virt & kLargePageMask) != 0) return false;
+    if ((phys & kLargePageMask) != 0) return false;
+
+    if (phys & ~kPhysicalAddressMask) return false;
+
+    const VirtualAddress address =
+        decompose_address(virt);
+
+    const PageFlags middle_flags =
+        intermediate_flags(flags);
+
+    PageTable* pdpt =
+        ensure_table(
+            pml4->entries[address.pml4_index],
+            middle_flags
+        );
+
+    if (pdpt == nullptr) return false;
+
+    PageTable* pd =
+        ensure_table(
+            pdpt->entries[address.pdpt_index],
+            middle_flags
+        );
+
+    if (pd == nullptr) return false;
+
+    uint64_t& pd_entry =
+        pd->entries[address.pd_index];
+
+    if (
+        pd_entry &
+        static_cast<uint64_t>(PageFlags::Present)
+    ) {
+        return false;
+    }
+
+    pd_entry =
+        make_page_entry(
+            phys,
+            flags |
+            PageFlags::Present |
+            PageFlags::Huge
+        );
+
+    return true;
+}
+
+uint64_t translate(
+    const AddressSpace& space,
+    uint64_t virt
+)
+{
+    if (space.pml4 == nullptr) {
+        return 0;
+    }
+
+    if (!is_canonical(virt)) {
+        return 0;
+    }
+
+    const VirtualAddress address =
+        decompose_address(virt);
+
+    const uint64_t present =
+        static_cast<uint64_t>(PageFlags::Present);
+
+    const uint64_t huge =
+        static_cast<uint64_t>(PageFlags::Huge);
+
+    // --------------------------------------------------------
+    // PML4 -> PDPT
+    // --------------------------------------------------------
+
+    const uint64_t pml4_entry =
+        space.pml4->entries[address.pml4_index];
+
+    if ((pml4_entry & present) == 0) {
+        return 0;
+    }
+
+    auto* pdpt =
+        reinterpret_cast<const PageTable*>(
+            physical_to_virtual(
+                page_entry_address(pml4_entry)
+            )
+        );
+
+    // --------------------------------------------------------
+    // PDPT -> PD
+    // --------------------------------------------------------
+
+    const uint64_t pdpt_entry =
+        pdpt->entries[address.pdpt_index];
+
+    if ((pdpt_entry & present) == 0) {
+        return 0;
+    }
+
+    // A 1 GiB mapping isn't produced by our current mapper,
+    // but recognize it here for completeness.
+    if (pdpt_entry & huge) {
+        return
+            page_entry_address(pdpt_entry) |
+            (virt & 0x3FFFFFFFull);
+    }
+
+    auto* pd =
+        reinterpret_cast<const PageTable*>(
+            physical_to_virtual(
+                page_entry_address(pdpt_entry)
+            )
+        );
+
+    // --------------------------------------------------------
+    // PD -> PT
+    // --------------------------------------------------------
+
+    const uint64_t pd_entry =
+        pd->entries[address.pd_index];
+
+    if ((pd_entry & present) == 0) {
+        return 0;
+    }
+
+    // 2 MiB page.
+    if (pd_entry & huge) {
+        return
+            page_entry_address(pd_entry) |
+            (virt & 0x1FFFFFull);
+    }
+
+    auto* pt =
+        reinterpret_cast<const PageTable*>(
+            physical_to_virtual(
+                page_entry_address(pd_entry)
+            )
+        );
+
+    // --------------------------------------------------------
+    // PT -> physical page
+    // --------------------------------------------------------
+
+    const uint64_t pt_entry =
+        pt->entries[address.pt_index];
+
+    if ((pt_entry & present) == 0) {
+        return 0;
+    }
+
+    return
+        page_entry_address(pt_entry) |
+        (virt & 0xFFFull);
 }
 
 } // namespace mm

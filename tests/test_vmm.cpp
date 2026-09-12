@@ -862,3 +862,470 @@ TEST(map_page_rejects_existing_mapping)
     );
 }
 
+// ============================================================
+// AddressSpace
+// ============================================================
+
+TEST(create_address_space)
+{
+    init(
+        regions,
+        sizeof(regions) / sizeof(regions[0]),
+        hhdm
+    );
+
+    AddressSpace space;
+
+    CHECK(create_address_space(space));
+    CHECK(space.pml4 != nullptr);
+    CHECK(space.pml4_physical != UINT64_MAX);
+
+    // A newly created PML4 must be completely empty.
+    for (size_t i = 0; i < kPageTableEntries; ++i)
+        CHECK(space.pml4->entries[i] == 0);
+}
+
+
+// ============================================================
+// translate()
+// ============================================================
+
+TEST(translate_mapped_page)
+{
+    init(
+        regions,
+        sizeof(regions) / sizeof(regions[0]),
+        hhdm
+    );
+
+    AddressSpace space;
+
+    CHECK(create_address_space(space));
+
+    const uint64_t virt = 0x40000000ull;
+    const uint64_t phys = 0x5000ull;
+
+    CHECK(
+        map_page(
+            space.pml4,
+            virt,
+            phys,
+            PageFlags::Writable
+        )
+    );
+
+    CHECK(translate(space, virt) == phys);
+
+    // Translation must preserve the page offset.
+    CHECK(
+        translate(space, virt + 123) ==
+        phys + 123
+    );
+}
+
+
+TEST(translate_unmapped_page)
+{
+    init(
+        regions,
+        sizeof(regions) / sizeof(regions[0]),
+        hhdm
+    );
+
+    AddressSpace space;
+
+    CHECK(create_address_space(space));
+
+    CHECK(
+        translate(
+            space,
+            0x40000000ull
+        ) == 0
+    );
+}
+
+
+// ============================================================
+// map_range()
+// ============================================================
+
+TEST(map_range_four_pages)
+{
+    init(
+        regions,
+        sizeof(regions) / sizeof(regions[0]),
+        hhdm
+    );
+
+    AddressSpace space;
+
+    CHECK(create_address_space(space));
+
+    const uint64_t virt = 0x40000000ull;
+    const uint64_t phys = 0x5000ull;
+    const uint64_t size = 4 * kPageSize;
+
+    CHECK(
+        map_range(
+            space,
+            virt,
+            phys,
+            size,
+            PageFlags::Writable
+        )
+    );
+
+    CHECK(
+        translate(
+            space,
+            virt + 0 * kPageSize
+        ) == phys + 0 * kPageSize
+    );
+
+    CHECK(
+        translate(
+            space,
+            virt + 1 * kPageSize
+        ) == phys + 1 * kPageSize
+    );
+
+    CHECK(
+        translate(
+            space,
+            virt + 2 * kPageSize
+        ) == phys + 2 * kPageSize
+    );
+
+    CHECK(
+        translate(
+            space,
+            virt + 3 * kPageSize
+        ) == phys + 3 * kPageSize
+    );
+}
+
+
+TEST(map_range_rejects_unaligned_virtual_address)
+{
+    init(
+        regions,
+        sizeof(regions) / sizeof(regions[0]),
+        hhdm
+    );
+
+    AddressSpace space;
+
+    CHECK(create_address_space(space));
+
+    CHECK(
+        !map_range(
+            space,
+            0x40000001ull,
+            0x5000ull,
+            kPageSize,
+            PageFlags::Writable
+        )
+    );
+}
+
+
+TEST(map_range_rejects_unaligned_physical_address)
+{
+    init(
+        regions,
+        sizeof(regions) / sizeof(regions[0]),
+        hhdm
+    );
+
+    AddressSpace space;
+
+    CHECK(create_address_space(space));
+
+    CHECK(
+        !map_range(
+            space,
+            0x40000000ull,
+            0x5001ull,
+            kPageSize,
+            PageFlags::Writable
+        )
+    );
+}
+
+
+TEST(map_range_rejects_unaligned_size)
+{
+    init(
+        regions,
+        sizeof(regions) / sizeof(regions[0]),
+        hhdm
+    );
+
+    AddressSpace space;
+
+    CHECK(create_address_space(space));
+
+    CHECK(
+        !map_range(
+            space,
+            0x40000000ull,
+            0x5000ull,
+            kPageSize + 1,
+            PageFlags::Writable
+        )
+    );
+}
+
+
+TEST(map_range_rejects_zero_size)
+{
+    init(
+        regions,
+        sizeof(regions) / sizeof(regions[0]),
+        hhdm
+    );
+
+    AddressSpace space;
+
+    CHECK(create_address_space(space));
+
+    CHECK(
+        !map_range(
+            space,
+            0x40000000ull,
+            0x5000ull,
+            0,
+            PageFlags::Writable
+        )
+    );
+}
+
+
+// ============================================================
+// map_range() page-table boundary
+// ============================================================
+
+TEST(map_range_crosses_page_table_boundary)
+{
+    init(
+        regions,
+        sizeof(regions) / sizeof(regions[0]),
+        hhdm
+    );
+
+    AddressSpace space;
+
+    CHECK(create_address_space(space));
+
+    // PT index 510.
+    //
+    // Four pages use:
+    //
+    //   page 0 -> PT 510
+    //   page 1 -> PT 511
+    //   page 2 -> PT   0
+    //   page 3 -> PT   1
+    //
+    // The third page therefore requires a new PT.
+    const uint64_t virt =
+        510ull << 12;
+
+    const uint64_t phys =
+        0x10000ull;
+
+    const uint64_t size =
+        4 * kPageSize;
+
+    CHECK(
+        map_range(
+            space,
+            virt,
+            phys,
+            size,
+            PageFlags::Writable
+        )
+    );
+
+    CHECK(
+        translate(
+            space,
+            virt + 0 * kPageSize
+        ) == phys + 0 * kPageSize
+    );
+
+    CHECK(
+        translate(
+            space,
+            virt + 1 * kPageSize
+        ) == phys + 1 * kPageSize
+    );
+
+    CHECK(
+        translate(
+            space,
+            virt + 2 * kPageSize
+        ) == phys + 2 * kPageSize
+    );
+
+    CHECK(
+        translate(
+            space,
+            virt + 3 * kPageSize
+        ) == phys + 3 * kPageSize
+    );
+}
+
+// ============================================================
+// Large pages
+// ============================================================
+
+TEST(map_page_large_translates)
+{
+    init(
+        regions,
+        sizeof(regions) / sizeof(regions[0]),
+        hhdm
+    );
+
+    AddressSpace space;
+    CHECK(create_address_space(space));
+
+    const uint64_t virt = 0x40000000;
+    const uint64_t phys = 0x00800000;
+
+    CHECK(map_page_large(
+        space.pml4,
+        virt,
+        phys,
+        PageFlags::Writable
+    ));
+
+    CHECK(translate(space, virt) == phys);
+    CHECK(translate(space, virt + 0x1000) == phys + 0x1000);
+    CHECK(
+        translate(
+            space,
+            virt + 0x1FFFFF
+        ) == phys + 0x1FFFFF
+    );
+}
+
+TEST(map_page_large_rejects_unaligned_virtual)
+{
+    init(
+        regions,
+        sizeof(regions) / sizeof(regions[0]),
+        hhdm
+    );
+
+    AddressSpace space;
+    CHECK(create_address_space(space));
+
+    CHECK(!map_page_large(
+        space.pml4,
+        0x40001000,
+        0x00800000,
+        PageFlags::Writable
+    ));
+}
+
+TEST(map_page_large_rejects_unaligned_physical)
+{
+    init(
+        regions,
+        sizeof(regions) / sizeof(regions[0]),
+        hhdm
+    );
+
+    AddressSpace space;
+    CHECK(create_address_space(space));
+
+    CHECK(!map_page_large(
+        space.pml4,
+        0x40000000,
+        0x00801000,
+        PageFlags::Writable
+    ));
+}
+
+TEST(map_page_rejects_inside_large_page)
+{
+    init(
+        regions,
+        sizeof(regions) / sizeof(regions[0]),
+        hhdm
+    );
+
+    AddressSpace space;
+    CHECK(create_address_space(space));
+
+    const uint64_t virt = 0x40000000;
+    const uint64_t phys = 0x00800000;
+
+    CHECK(map_page_large(
+        space.pml4,
+        virt,
+        phys,
+        PageFlags::Writable
+    ));
+
+    CHECK(!map_page(
+        space.pml4,
+        virt,
+        phys,
+        PageFlags::Writable
+    ));
+}
+
+TEST(map_range_large_maps_multiple_pages)
+{
+    init(
+        regions,
+        sizeof(regions) / sizeof(regions[0]),
+        hhdm
+    );
+
+    AddressSpace space;
+    CHECK(create_address_space(space));
+
+    const uint64_t virt = 0x40000000;
+    const uint64_t phys = 0x00800000;
+    const uint64_t size = 4 * kLargePageSize;
+
+    CHECK(map_range_large(
+        space,
+        virt,
+        phys,
+        size,
+        PageFlags::Writable
+    ));
+
+    CHECK(
+        translate(space, virt)
+        == phys
+    );
+
+    CHECK(
+        translate(
+            space,
+            virt + kLargePageSize
+        )
+        == phys + kLargePageSize
+    );
+
+    CHECK(
+        translate(
+            space,
+            virt + 2 * kLargePageSize
+        )
+        == phys + 2 * kLargePageSize
+    );
+
+    CHECK(
+        translate(
+            space,
+            virt + 3 * kLargePageSize
+        )
+        == phys + 3 * kLargePageSize
+    );
+}
