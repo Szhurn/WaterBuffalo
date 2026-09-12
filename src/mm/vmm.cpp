@@ -505,10 +505,18 @@ uint64_t translate(
         (virt & 0xFFFull);
 }
 
+// ============================================================
+// Activating an address space
+// ============================================================
+
 void load_address_space(const AddressSpace& space)
 {
     asm volatile("mov %0, %%cr3" :: "r"(space.pml4_physical) : "memory");
 }
+
+// ============================================================
+// The kernel address space
+// ============================================================
 
 bool build_kernel_address_space(
     AddressSpace& out,
@@ -526,6 +534,9 @@ bool build_kernel_address_space(
 
     if (!create_address_space(out)) return false;
 
+    // The direct map spans everything the memory map describes, gaps
+    // included: the framebuffer and MMIO regions sit far above RAM, and
+    // one contiguous run avoids two regions sharing a 2 MiB page.
     uint64_t highest = 0;
 
     for (size_t i = 0; i < region_count; ++i) {
@@ -550,6 +561,8 @@ bool build_kernel_address_space(
         return false;
     }
 
+    // Each segment is mapped with only the rights it needs. Segment
+    // starts are page aligned by the linker script; data_end is not.
     const uint64_t data_end_rounded =
         align_up(layout.data_end, kPageSize);
 
@@ -564,17 +577,37 @@ bool build_kernel_address_space(
             return map_range(out, start, phys, size, flags);
         };
 
-    if (!map_segment(layout.image_start,  layout.text_start,
-                    PageFlags::NoExecute))                        return false;
+    // Boot protocol requests: read-only data.
+    if (!map_segment(
+            layout.image_start,
+            layout.text_start,
+            PageFlags::NoExecute)) {
+        return false;
+    }
 
-    if (!map_segment(layout.text_start,   layout.rodata_start,
-                    PageFlags::None))                             return false;
+    // .text: executable, never writable.
+    if (!map_segment(
+            layout.text_start,
+            layout.rodata_start,
+            PageFlags::None)) {
+        return false;
+    }
 
-    if (!map_segment(layout.rodata_start, layout.data_start,
-                    PageFlags::NoExecute))                        return false;
+    // .rodata and .init_array.
+    if (!map_segment(
+            layout.rodata_start,
+            layout.data_start,
+            PageFlags::NoExecute)) {
+        return false;
+    }
 
-    if (!map_segment(layout.data_start,   data_end_rounded,
-                    PageFlags::Writable | PageFlags::NoExecute))  return false;
+    // .data and .bss: writable, never executable.
+    if (!map_segment(
+            layout.data_start,
+            data_end_rounded,
+            PageFlags::Writable | PageFlags::NoExecute)) {
+        return false;
+    }
 
     return true;
 

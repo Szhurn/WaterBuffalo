@@ -38,7 +38,7 @@ SECTIONS
      *
      * KEEP is required: no code references these objects, so --gc-sections
      * would otherwise discard them. The resulting image links and boots with
-     * every response left null. 
+     * every response left null.
      */
         .limine_requests : {
         __limine_requests_start = .;
@@ -91,7 +91,7 @@ SECTIONS
         __data_end = .;
     } :data
 
-    
+
     /* Unwind tables are unused under -fno-exceptions; the rest is toolchain
      * metadata. */
     /DISCARD/ : {

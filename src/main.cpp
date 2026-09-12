@@ -240,7 +240,7 @@ extern "C" void kmain()
     // ========================================================
 
     const uint64_t hhdm_offset = hhdm_request.response->offset;
-    
+
     const uint64_t kernel_virtual_base =
         kernel_address_request.response->virtual_base;
 
@@ -382,9 +382,20 @@ extern "C" void kmain()
     mm::init(
         regions,
         memmap_request.response->entry_count,
-        hhdm_request.response->offset
+        hhdm_offset
     );
 
+
+    // ========================================================
+    // Kernel address space
+    //
+    // Built and checked before CR3 is loaded: once the switch
+    // happens, a missing mapping is a triple fault with no
+    // diagnostic, so every mapping the switch depends on is
+    // verified here first.
+    // ========================================================
+
+    // Needed below to verify the framebuffer is reachable.
     struct limine_framebuffer* framebuffer =
         framebuffer_request.response->framebuffers[0];
 
@@ -404,48 +415,54 @@ extern "C" void kmain()
         space,
         regions,
         memmap_request.response->entry_count,
-        hhdm_request.response->offset,
+        hhdm_offset,
         layout
     ))
     {
         print::kprintf("FATAL: failed to build kernel address space\n");
         hcf();
     }
-    
+
     print::kprintf(
-        "pml4 physical:  %p\n",
+        "pml4 physical:   %p\n",
         space.pml4_physical
     );
 
     print::kprintf(
-        "hhdm translate: %p (expect 0x1000)\n",
-        mm::translate(
-            space,
-            hhdm_request.response->offset + 0x1000
-        )
+        "direct map:      %p -> %p (expect 0x1000)\n",
+        hhdm_offset + 0x1000,
+        mm::translate(space, hhdm_offset + 0x1000)
     );
 
     print::kprintf(
-        "fb translate:   %p (expect 0xfd000000)\n",
+        "framebuffer:     %p -> %p (expect %p)\n",
+        reinterpret_cast<uint64_t>(framebuffer->address),
         mm::translate(
             space,
             reinterpret_cast<uint64_t>(framebuffer->address)
-        )
-    );
-    
-    print::kprintf(
-        "translate image_start: %p\n",
-        mm::translate(space, image_start)
+        ),
+        reinterpret_cast<uint64_t>(framebuffer->address) - hhdm_offset
     );
 
     print::kprintf(
-        "translate text_start:  %p\n",
-        mm::translate(space, text_start)
+        "image:           %p -> %p (expect %p)\n",
+        image_start,
+        mm::translate(space, image_start),
+        virtual_to_physical(image_start)
     );
 
     print::kprintf(
-        "translate data_start:  %p\n",
-        mm::translate(space, data_start)
+        ".text:           %p -> %p (expect %p)\n",
+        text_start,
+        mm::translate(space, text_start),
+        virtual_to_physical(text_start)
+    );
+
+    print::kprintf(
+        ".data:           %p -> %p (expect %p)\n",
+        data_start,
+        mm::translate(space, data_start),
+        virtual_to_physical(data_start)
     );
 
     print::kprintf("loading cr3...\n");
@@ -459,7 +476,7 @@ extern "C" void kmain()
     // ========================================================
 
     // Fetch the first framebuffer.
-    
+
 
     // Assume a 32-bit RGB framebuffer.
     auto* fb_ptr =
